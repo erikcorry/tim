@@ -69,6 +69,46 @@ class Document:
       return
     root.do block
 
+  /// Given an $h tall window, the first line of the document to show is
+  /// the $l'th line of the document.  Return the number of lines to display.
+  visible-lines h/int w/int l/int -> int:
+
+
+  // How many lines of screen does this $line wrap to?
+  static wrap-count_ line/string w/int -> int:
+    if line.size <= w: return 1
+    return line.size / w
+
+class IterationPoint:
+  // The line number.
+  line /int
+  // Whether the iteration point is the string on the left or the right.
+  is-left /bool
+  // The current node.
+  node /Node
+  // For left iteration points, this is the parent node.  For right iterations
+  // points it may be a higher parent, one that is a parent of the successor.
+  parent /IterationPoint?
+
+  constructor .line .is-left .node .parent:
+
+  line -> string:
+    if is-left: return node.left
+    return node.right
+
+  next -> IterationPoint:
+    if is-left:
+      if node.right is string:
+        return IterationPoint (line + 1) false node parent
+      // Node.right is a node.  We need to move to the left-most child of it.
+      grnd-prnt := parent
+      prnt := this
+      nd := node.right
+      while true:
+        if n.left is string:
+          return IterationPoint (line + 1) false n parent
+        prnt = IterationPoint 0 true n prnt
+
 class Node:
   left := ?
   right := ?
@@ -165,6 +205,7 @@ range root from/int to/int:
           if r != null:
             return Node l (Node self r)
           return Node l self
+//              dlfjlsdkjflsdkjflskdjflsdk fjlsdk fjlskdj flskdjf lsdkjf lsdkjf sdlkfj lsdkfj sldkfj lsdkfj lsdkj f
         if r != null:
           return Node self r
         return self
