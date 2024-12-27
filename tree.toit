@@ -228,7 +228,7 @@ class BinaryNode extends Node:
     self := this
     while self.depth > limit:
       print "Rebalancing, depth is $self.depth > $limit"
-      lcr := self.rebalance_ (limit / 3)
+      lcr := self.rebalance_ (limit / 2)
       l := lcr[0]
       c := lcr[1]
       r := lcr[2]
@@ -258,17 +258,22 @@ class BinaryNode extends Node:
 
   splat_ node/BinaryNode -> BinaryNode:
     max-lines := 1 << node.depth
-    if node.line-count * 4 < max-lines:
+    if node.line-count * 6 < max-lines:
+      print "splat $node.line-count lines that had depth $node.depth"
+      print node.dump_
       array := []
       node.do: array.add it
-      return splat2_ array
+      result := splat2_ array
+      print "  Splatted $result.line-count lines down to depth $result.depth"
+      print result.dump_
+      return result
     return node
 
   rebalance_ limit/int -> List:
     if left-depth < limit and right-depth < limit:
       if left-depth > right-depth:
         l := splat_ (left as BinaryNode)
-        return [left, right, NullNode.instance]
+        return [l, right, NullNode.instance]
       else if right-depth > limit / 2:
         r := splat_ (right as BinaryNode)
         return [NullNode.instance, left, r]
