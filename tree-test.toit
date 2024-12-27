@@ -43,7 +43,7 @@ tree-test:
   print
       document.dump_
 
-  2000.repeat:
+  10000.repeat:
     document2 = document2.append "x$it"
 
   print

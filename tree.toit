@@ -228,28 +228,50 @@ class BinaryNode extends Node:
     self := this
     while self.depth > limit:
       print "Rebalancing, depth is $self.depth > $limit"
-      lcr := self.rebalance_ (limit / 2)
+      lcr := self.rebalance_ (limit / 3)
       l := lcr[0]
       c := lcr[1]
       r := lcr[2]
       if l is not NullNode:
         if r is not NullNode:
+          print "binarynode"
+          print "binarynode"
           self = BinaryNode (BinaryNode l c) r
         else:
+          print "binarynode"
           self = BinaryNode l c
       else if r is not NullNode:
+        print "binarynode"
         self = BinaryNode c r
       else:
         self = c
       print "after: depth is $self.depth"
     return self
 
+  splat2_ array -> BinaryNode:
+    assert: array.size >= 2
+    if array.size == 2: return BinaryNode array[0] array[1]
+    if array.size == 3: return BinaryNode array[0] (BinaryNode array[1] array[2])
+    return BinaryNode
+        splat2_ array[.. array.size / 2]
+        splat2_ array[array.size / 2 ..]
+
+  splat_ node/BinaryNode -> BinaryNode:
+    max-lines := 1 << node.depth
+    if node.line-count * 4 < max-lines:
+      array := []
+      node.do: array.add it
+      return splat2_ array
+    return node
+
   rebalance_ limit/int -> List:
     if left-depth < limit and right-depth < limit:
-      if left-depth > limit / 2:
+      if left-depth > right-depth:
+        l := splat_ (left as BinaryNode)
         return [left, right, NullNode.instance]
       else if right-depth > limit / 2:
-        return [NullNode.instance, left, right]
+        r := splat_ (right as BinaryNode)
+        return [NullNode.instance, left, r]
     if left-depth > right-depth:
       lcr := left.rebalance_ limit
       l := lcr[0]
@@ -260,8 +282,10 @@ class BinaryNode extends Node:
           left-depth := (l is string) ? 1 : l.depth
           right-depth := (right is string) ? 1 : right.depth
           if left-depth < right-depth:
+            print "binarynode"
             return [(BinaryNode l c), r, right]
           else:
+            print "binarynode"
             return [l, c, (BinaryNode r right)]
         return [l, c, right]
       if r is not NullNode:
@@ -278,8 +302,10 @@ class BinaryNode extends Node:
           left-depth := (left is string) ? 1 : left.depth
           right-depth := (r is string) ? 1 : r.depth
           if left-depth < right-depth:
+            print "binarynode"
             return [(BinaryNode left l), c, r]
           else:
+            print "binarynode"
             return [left, l, (BinaryNode c r)]
         return [left, l, c]
       if r is not NullNode:
