@@ -23,13 +23,13 @@ tree-test:
   assert: "a,b,c" == (join (range document.root 0 3) ",")
   assert: "a,b,c" == (join (range document2.root 0 3) ",")
   assert: "b,c,d" == (join (range document2.root 1 4) ",")
-  
-  4.repeat:
-    document2.rebase it
-    print "Rebased on $it:"
-    print document2.dump_
-    assert: "a,b,c,d" == (join document2 ",")
 
+  5.repeat:
+    document = document.prepend "a$it"
+
+  print
+      document.dump_
+  
 join document divider/string -> string:
   array := []
   document.do: array.add it

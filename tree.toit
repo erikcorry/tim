@@ -2,12 +2,11 @@ class Document:
   // Null: Empty document.
   // String: Single-line document.
   // Node: Multi-line document.
-  root := null
+  root := NullNode.instance
   previous /Document? := null
   next /Document?  := null
 
   dump_ -> string:
-    if root == null: return "(null)"
     if root is string: return root
     return root.dump_
 
@@ -16,25 +15,41 @@ class Document:
   static empty -> Document:
     return empty_
 
-  static empty_ := Document null null
+  static empty_ := Document NullNode.instance null
 
   append lines -> Document:
-    if lines != null and lines is not string and lines is not Node:
+    if lines is not string and lines is not Node:
       throw "Invalid lines"
-    if root == null: return Document lines this
-    if lines == null: return this
-    result := Document (Node root lines) this
+    if lines is NullNode: return this
+    result /Document := ?
+    if root is NullNode:
+      result = Document lines this
+    else if root is string:
+      result = Document (BinaryNode root lines) this
+    else:
+      result = Document (BinaryNode root lines) this
     next = result
+    if result.root is Node: result.root = result.root.rebalance 10
     return result
 
   prepend lines -> Document:
-    if lines != null and lines is not string and lines is not Node:
+    if lines is not string and lines is not Node:
       throw "Invalid lines"
-    if root == null: return Document lines this
-    if lines == null: return this
-    result := Document (Node lines root) this
+    if lines is NullNode: return this
+    result /Document := ?
+    if root is NullNode:
+      result = Document lines this
+    else if root is string:
+      result = Document (BinaryNode lines root) this
+    else:
+      result = Document (BinaryNode lines root) this
     next = result
+    if result.root is Node: result.root = result.root.rebalance 10
     return result
+
+  static line-count thing -> int:
+    if thing is string: return 1
+    return thing.line-count
 
   insert lines at/int -> Document:
     if at == 0: return prepend lines
@@ -43,45 +58,25 @@ class Document:
     if not 0 < at < line-count: throw "Invalid at"
     left := range root 0 at
     right := range root at line-count
-    result := Document (Node left (Node lines right)) this
+    result := Document (BinaryNode left (BinaryNode lines right)) this
     next = result
     return result
 
-  // Pivot tree to put nth line near the top.  This is a mutating method, but
-  // it doesn't change the document, just the data structure storing it.
-  rebase at/int -> none:
-    total-lines := line-count root
-    if not 0 <= at < total-lines: throw "Invalid at"
-    left := (at == 0) ? null : (range root 0 at)
-    right := (at == total-lines - 1) ? null : (range root (at + 1) total-lines)
-    new-root-line/string := line root at
-    if left == null: 
-      root = Node new-root-line right
-    else if right == null:
-      root = Node left new-root-line
-    else:
-      root = Node left (Node new-root-line right)
-
   do [block] -> none:
-    if root == null: return
     if root is string:
       block.call root
       return
     root.do block
-
-  /// Given an $h tall window, the first line of the document to show is
-  /// the $l'th line of the document.  Return the number of lines to display.
-  visible-lines h/int w/int l/int -> int:
-
 
   // How many lines of screen does this $line wrap to?
   static wrap-count_ line/string w/int -> int:
     if line.size <= w: return 1
     return line.size / w
 
+/*
 class IterationPoint:
   // The line number.
-  line /int
+  line-number /int
   // Whether the iteration point is the string on the left or the right.
   is-left /bool
   // The current node.
@@ -90,7 +85,7 @@ class IterationPoint:
   // points it may be a higher parent, one that is a parent of the successor.
   parent /IterationPoint?
 
-  constructor .line .is-left .node .parent:
+  constructor .is-left .node .parent:
 
   line -> string:
     if is-left: return node.left
@@ -108,18 +103,63 @@ class IterationPoint:
         if n.left is string:
           return IterationPoint (line + 1) false n parent
         prnt = IterationPoint 0 true n prnt
+*/
 
-class Node:
+abstract class Node:
+  abstract line-count -> int
+
+  abstract do [block] -> none
+
+  abstract dump_ -> string
+
+  abstract dump_ prefix1/string prefix2/string prefix3/string -> string
+  
+  abstract range from/int to/int -> Node
+
+class NullNode extends Node:
+  line-count -> int: return 0
+  depth -> int: return 0
+
+  static instance := NullNode
+  
+  do [block] -> none:
+    // Do nothing.
+
+  dump_ -> string:
+    return ""
+
+  dump_ prefix1/string prefix2/string prefix3/string -> string:
+    return ""
+
+  range from/int to/int -> Node:
+    if from != 0 or to != 0: throw "Invalid range"
+    return this
+
+  rebalance limit/int -> Node:
+    return this
+
+  rebalance_ limit/int -> List:
+    return [null, this, null]
+
+class BinaryNode extends Node:
   left := ?
   right := ?
-  count /int
+  line-count /int := ?
+  depth /int := ?
 
   constructor .left .right:
-    if left is not string and left is not Node:
-      throw "Invalid left"
-    if right is not string and right is not Node:
-      throw "Invalid right"
-    count = (line-count left) + (line-count right)
+    line-count = (left is string ? 1 : left.line-count)
+        + (right is string ? 1 : right.line-count)
+    depth = 1 + (max (left is string ? 1 : left.depth)
+                     (right is string ? 1 : right.depth))
+
+  left-line-count -> int:
+    if left is string: return 1
+    return left.line-count
+
+  right-line-count -> int:
+    if right is string: return 1
+    return right.line-count
 
   do [block] -> none:
     if left is string:
@@ -132,111 +172,133 @@ class Node:
       right.do block
 
   dump_ -> string:
-    return dump_ "" ""
+    return dump_ "" "" ""
 
-  dump_ prefix1/string prefix2/string -> string:
+  static VERTICAL-BAR ::= "\u{2502}"
+  static TOP-CURVE ::= "\u{256D}"
+  static BOTTOM-CURVE ::= "\u{2570}"
+  static T-SHAPE ::= "\u{2524}"
+
+  dump_ above-prefix/string below-prefix/string parent-connector/string -> string:
     result := ""
     if left is string:
-      result += prefix1 + "\u{2571}" + left + "\n"
+      result += above-prefix + TOP-CURVE + left + "\n"
     else:
-      result += left.dump_ (prefix1 + " ") (prefix1 + "\u{2571}")
+      result += left.dump_
+          above-prefix + " "
+          above-prefix + VERTICAL-BAR
+          above-prefix + TOP-CURVE
+    result += parent-connector + T-SHAPE + "\n"
     if right is string:
-      result += prefix2 + "\u{2572}" + right + "\n"
+      result += below-prefix + BOTTOM-CURVE + right + "\n"
     else:
-      result += right.dump_ (prefix2 + "\u{2572}") (prefix2 + " ")
+      result += right.dump_
+          below-prefix + VERTICAL-BAR
+          below-prefix + " "
+          below-prefix + BOTTOM-CURVE
     return result
 
-line-count thing -> int:
-  if thing == null:
-    return 0
-  if thing is string:
-    return 1
-  return thing.count
+    //  |╭a0
+    //  ╰┤ ╭a
+    //   │╭┤
+    //   ╰┤╰b
+    //    ╰c
 
-line thing at/int -> string:
-  while true:
-    total-lines := line-count thing
-    if not 0 <= at < total-lines: throw "Invalid at"
-    if thing is string: return thing
-    assert: thing is Node
-    left-count := line-count thing.left
-    if at < left-count:
-      thing = thing.left
+  rebalance limit/int -> Node:
+    if depth <= limit: return this
+    lcr := rebalance_ (limit / 2)
+    l := lcr[0]
+    c := lcr[1]
+    r := lcr[2]
+    if l:
+      if r:
+        return BinaryNode (BinaryNode l c) r
+      return BinaryNode l c
+    if r:
+      return BinaryNode c r
+    return c
+
+  rebalance_ limit/int -> List:
+    if left-depth < limit and right-depth < limit:
+      return [NullNode.instance, this, NullNode.instance]
+    if left-depth > right-depth:
+      lcr := left.rebalance_ limit
+      l := lcr[0]
+      c := lcr[1]
+      r := lcr[2]
+      if l is not NullNode:
+        if r is not NullNode:
+          // l, c, r, right
+          return [l, c, (BinaryNode r right)]
+        return [l, c, right]
+      if r is not NullNode:
+        return [c, r, right]
+      return [NullNode.instance, this, NullNode.instance]
     else:
-      thing = thing.right
-      at -= left-count
+      lcr := right.rebalance_ limit
+      l := lcr[0]
+      c := lcr[1]
+      r := lcr[2]
+      if l is not NullNode:
+        if r is not NullNode:
+          // left, l, c, r
+          return [(BinaryNode left l), c, r]
+        return [left, l, c]
+      if r is not NullNode:
+        return [left, c, r]
+      return [NullNode.instance, this, NullNode.instance]
 
-join_ node divider/string -> string:
-  if node == null: return ""
-  if node is string: return node
+  line n/int -> string:
+    if not 0 <= n < line-count: throw "Invalid line"
+    if left is Node:
+      count := left-line-count
+      if n < count: return left.line n
+      if n == count and right is string: return right
+      return right.line (n - count)
+    if n == 0: return left
+    return right.line (n - 1)
+
+  range from/int to/int:
+    if from == 0 and to == line-count: return this
+    if to <= left-line-count: return left-range from to
+    if from >= left-line-count:
+      return right-range (from - left-line-count) (to - left-line-count)
+    return BinaryNode
+        (left-range from left-line-count)
+        (right-range 0 (to - left-line-count))
+
+  left-depth -> int:
+    if left is string: return 1
+    return left.depth
+
+  right-depth -> int:
+    if right is string: return 1
+    return right.depth
+
+  left-range from/int to/int:
+    if left is string:
+      if from == 0 and to == 1: return left
+      throw "Invalid range"
+    return left.range from to
+
+  right-range from/int to/int:
+    if right is string:
+      if from == 0 and to == 1: return right
+      throw "Invalid range"
+    return right.range from to
+
+join_ node/Node divider/string -> string:
   array := []
   node.do: array.add it
   return array.join divider
 
 /**
  * Creates a collection that has the numbered lines in it.
- * $root is null, a string, or a Node.
- * 0-based $from, $to.  To is non-inclusive.
+ * $root a string, or a Node, including NullNode.
+ * zero-based $from, $to.  To is non-inclusive.
  */
 range root from/int to/int:
-  if root == null:
-    if from != 0 or to != 0: throw "Invalid range"
-    return null
   if root is string:
     if from != 0 or to != 1: throw "Invalid range $from-$to"
     return root
-  // We can't use recursion because it might recurse too deep.
-  l := null
-  r := null
-  self := root
-  while true:
-    if self is string:
-      if from != 0 or to != 1: throw "Invalid range $from-$to"
-      if l == null:
-        if r == null:
-          return self
-        return Node self r
-      if r == null:
-        return Node l self
-      return Node (Node l self) r
-    if self is Node:
-      if from == 0 and to == (line-count self):
-        if l != null:
-          if r != null:
-            return Node l (Node self r)
-          return Node l self
-//              dlfjlsdkjflsdkjflskdjflsdk fjlsdk fjlskdj flskdjf lsdkjf lsdkjf sdlkfj lsdkfj sldkfj lsdkfj lsdkj f
-        if r != null:
-          return Node self r
-        return self
-      before := line-count self.left
-      after := line-count self.right
-      left-overhang := before - from
-      right-overhang := to - before
-      if left-overhang < 0:
-        assert: l == null
-        from -= before
-        to -= before
-        self = self.right
-      else if right-overhang < 0:
-        assert: r == null
-        self = self.left
-      else if left-overhang == 0:
-        self = self.right
-        from -= before
-        to -= before
-      else if right-overhang == 0:
-        self = self.left
-      else if left-overhang < right-overhang:
-        // Recurse on the short side to limit depth.
-        new-l := range self.left from before
-        l = (l == null) ? new-l : (Node l new-l)
-        self = self.right
-        from = 0
-        to -= left-overhang
-      else:
-        // Recurse on the short side to limit depth.
-        new-r := range self.right 0 right-overhang
-        r = (r == null) ? new-r : (Node new-r r)
-        self = self.left
-        to -= right-overhang
+  return root.range from to
