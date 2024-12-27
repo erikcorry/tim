@@ -24,11 +24,31 @@ tree-test:
   assert: "a,b,c" == (join (range document2.root 0 3) ",")
   assert: "b,c,d" == (join (range document2.root 1 4) ",")
 
-  5.repeat:
+  2.repeat:
     document = document.prepend "a$it"
+
+  2.repeat:
+    document = document.append "b$it"
+
+  3.repeat:
+    document = document.prepend "c$it"
+
+  3.repeat:
+    document = document.append "d$it"
+
+  5.repeat:
+    document = document.prepend "e$it"
+    document = document.append "f$it"
 
   print
       document.dump_
+
+  2000.repeat:
+    document2 = document2.append "x$it"
+
+  print
+      document2.dump_
+
   
 join document divider/string -> string:
   array := []

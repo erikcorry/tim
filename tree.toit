@@ -29,7 +29,7 @@ class Document:
     else:
       result = Document (BinaryNode root lines) this
     next = result
-    if result.root is Node: result.root = result.root.rebalance 10
+    if result.root is Node: result.root = result.root.rebalance 20
     return result
 
   prepend lines -> Document:
@@ -44,7 +44,7 @@ class Document:
     else:
       result = Document (BinaryNode lines root) this
     next = result
-    if result.root is Node: result.root = result.root.rebalance 10
+    if result.root is Node: result.root = result.root.rebalance 20
     return result
 
   static line-count thing -> int:
@@ -112,13 +112,15 @@ abstract class Node:
 
   abstract dump_ -> string
 
-  abstract dump_ prefix1/string prefix2/string prefix3/string -> string
+  abstract dump_ p1/string p2/string p3/string p4/string p5/string -> string
   
   abstract range from/int to/int -> Node
 
 class NullNode extends Node:
   line-count -> int: return 0
   depth -> int: return 0
+
+  stringify -> string: return "(nullnode)"
 
   static instance := NullNode
   
@@ -128,7 +130,7 @@ class NullNode extends Node:
   dump_ -> string:
     return ""
 
-  dump_ prefix1/string prefix2/string prefix3/string -> string:
+  dump_ p1/string p2/string p3/string p4/string p5/string -> string:
     return ""
 
   range from/int to/int -> Node:
@@ -139,7 +141,7 @@ class NullNode extends Node:
     return this
 
   rebalance_ limit/int -> List:
-    return [null, this, null]
+    return [NullNode.instance, this, NullNode.instance]
 
 class BinaryNode extends Node:
   left := ?
@@ -172,30 +174,48 @@ class BinaryNode extends Node:
       right.do block
 
   dump_ -> string:
-    return dump_ "" "" ""
+    return dump_ "" "" "" "" ""
 
   static VERTICAL-BAR ::= "\u{2502}"
   static TOP-CURVE ::= "\u{256D}"
   static BOTTOM-CURVE ::= "\u{2570}"
   static T-SHAPE ::= "\u{2524}"
 
-  dump_ above-prefix/string below-prefix/string parent-connector/string -> string:
+  dump_ top-prefix above-prefix/string parent-connector/string below-prefix/string bottom-prefix/string -> string:
     result := ""
-    if left is string:
-      result += above-prefix + TOP-CURVE + left + "\n"
+    // 0 = top does connector
+    // 1 = bottom does connector
+    // 2 = we do connector.
+    connector-type := ?
+    if left is not string and left is not NullNode:
+      connector-type = 0
+    else if right is not string and right is not NullNode:
+      connector-type = 1
+    else:
+      connector-type = 2
+    if left is string or left is NullNode:
+      result += top-prefix + TOP-CURVE + left.stringify + "\n"
     else:
       result += left.dump_
+          top-prefix + " "
           above-prefix + " "
-          above-prefix + VERTICAL-BAR
           above-prefix + TOP-CURVE
-    result += parent-connector + T-SHAPE + "\n"
-    if right is string:
-      result += below-prefix + BOTTOM-CURVE + right + "\n"
+          above-prefix + VERTICAL-BAR
+          connector-type == 0
+              ? parent-connector + T-SHAPE
+              : above-prefix + VERTICAL-BAR
+    if connector-type == 2: result += parent-connector + T-SHAPE + "\n"
+    if right is string or right is NullNode:
+      result += bottom-prefix + BOTTOM-CURVE + right.stringify + "\n"
     else:
       result += right.dump_
+          connector-type == 1
+              ? parent-connector + T-SHAPE
+              : below-prefix + VERTICAL-BAR
           below-prefix + VERTICAL-BAR
-          below-prefix + " "
           below-prefix + BOTTOM-CURVE
+          below-prefix + " "
+          bottom-prefix + " "
     return result
 
     //  |╭a0
@@ -205,22 +225,31 @@ class BinaryNode extends Node:
     //    ╰c
 
   rebalance limit/int -> Node:
-    if depth <= limit: return this
-    lcr := rebalance_ (limit / 2)
-    l := lcr[0]
-    c := lcr[1]
-    r := lcr[2]
-    if l:
-      if r:
-        return BinaryNode (BinaryNode l c) r
-      return BinaryNode l c
-    if r:
-      return BinaryNode c r
-    return c
+    self := this
+    while self.depth > limit:
+      print "Rebalancing, depth is $self.depth > $limit"
+      lcr := self.rebalance_ (limit / 2)
+      l := lcr[0]
+      c := lcr[1]
+      r := lcr[2]
+      if l is not NullNode:
+        if r is not NullNode:
+          self = BinaryNode (BinaryNode l c) r
+        else:
+          self = BinaryNode l c
+      else if r is not NullNode:
+        self = BinaryNode c r
+      else:
+        self = c
+      print "after: depth is $self.depth"
+    return self
 
   rebalance_ limit/int -> List:
     if left-depth < limit and right-depth < limit:
-      return [NullNode.instance, this, NullNode.instance]
+      if left-depth > limit / 2:
+        return [left, right, NullNode.instance]
+      else if right-depth > limit / 2:
+        return [NullNode.instance, left, right]
     if left-depth > right-depth:
       lcr := left.rebalance_ limit
       l := lcr[0]
@@ -228,8 +257,12 @@ class BinaryNode extends Node:
       r := lcr[2]
       if l is not NullNode:
         if r is not NullNode:
-          // l, c, r, right
-          return [l, c, (BinaryNode r right)]
+          left-depth := (l is string) ? 1 : l.depth
+          right-depth := (right is string) ? 1 : right.depth
+          if left-depth < right-depth:
+            return [(BinaryNode l c), r, right]
+          else:
+            return [l, c, (BinaryNode r right)]
         return [l, c, right]
       if r is not NullNode:
         return [c, r, right]
@@ -242,7 +275,12 @@ class BinaryNode extends Node:
       if l is not NullNode:
         if r is not NullNode:
           // left, l, c, r
-          return [(BinaryNode left l), c, r]
+          left-depth := (left is string) ? 1 : left.depth
+          right-depth := (r is string) ? 1 : r.depth
+          if left-depth < right-depth:
+            return [(BinaryNode left l), c, r]
+          else:
+            return [left, l, (BinaryNode c r)]
         return [left, l, c]
       if r is not NullNode:
         return [left, c, r]
