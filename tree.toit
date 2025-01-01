@@ -140,7 +140,7 @@ class NullNode extends Node:
   rebalance limit/int -> Node:
     return this
 
-  rebalance_ limit/int -> List:
+  rebalance_ limit/int --force-single-answer/bool -> List:
     return [NullNode.instance, this, NullNode.instance]
 
 class BinaryNode extends Node:
@@ -225,28 +225,10 @@ class BinaryNode extends Node:
     //    ╰c
 
   rebalance limit/int -> Node:
-    self := this
-    while self.depth > limit:
-      print "Rebalancing, depth is $self.depth > $limit"
-      lcr := self.rebalance_ (limit / 2)
-      l := lcr[0]
-      c := lcr[1]
-      r := lcr[2]
-      if l is not NullNode:
-        if r is not NullNode:
-          print "binarynode"
-          print "binarynode"
-          self = BinaryNode (BinaryNode l c) r
-        else:
-          print "binarynode"
-          self = BinaryNode l c
-      else if r is not NullNode:
-        print "binarynode"
-        self = BinaryNode c r
-      else:
-        self = c
-      print "after: depth is $self.depth"
-    return self
+    if line-count & 0xfff == 0:
+      print "$line-count lines, depth $depth"
+    lcr := rebalance_ (depth - 1) --force-single-answer
+    return lcr[1]
 
   splat2_ array -> BinaryNode:
     assert: array.size >= 2
@@ -269,53 +251,74 @@ class BinaryNode extends Node:
       return result
     return node
 
-  rebalance_ limit/int -> List:
-    if left-depth < limit and right-depth < limit:
-      if left-depth > right-depth:
-        l := splat_ (left as BinaryNode)
-        return [l, right, NullNode.instance]
-      else if right-depth > limit / 2:
-        r := splat_ (right as BinaryNode)
-        return [NullNode.instance, left, r]
-    if left-depth > right-depth:
-      lcr := left.rebalance_ limit
-      l := lcr[0]
-      c := lcr[1]
-      r := lcr[2]
-      if l is not NullNode:
-        if r is not NullNode:
-          left-depth := (l is string) ? 1 : l.depth
-          right-depth := (right is string) ? 1 : right.depth
-          if left-depth < right-depth:
-            print "binarynode"
-            return [(BinaryNode l c), r, right]
-          else:
-            print "binarynode"
-            return [l, c, (BinaryNode r right)]
-        return [l, c, right]
-      if r is not NullNode:
-        return [c, r, right]
-      return [NullNode.instance, this, NullNode.instance]
+  rebalance_ limit/int --force-single-answer/bool -> List:
+    if left-depth < limit and right-depth < limit: return [NullNode.instance, this, NullNode.instance]
+
+    n1 := null
+    n2 := null
+    n3 := null
+    n4 := null
+
+    if left-depth > right-depth or (left is BinaryNode and right is BinaryNode and left-depth == right-depth and left.line-count < right.line-count):
+      lcr := left.rebalance_ (limit - 1) --no-force-single-answer
+      n1 = lcr[0]
+      n2 = lcr[1]
+      n3 = lcr[2]
+      n4 = right
+    else if right is BinaryNode:
+      lcr := right.rebalance_ (limit - 1) --no-force-single-answer
+      n1 = left
+      n2 = lcr[0]
+      n3 = lcr[1]
+      n4 = lcr[2]
     else:
-      lcr := right.rebalance_ limit
-      l := lcr[0]
-      c := lcr[1]
-      r := lcr[2]
-      if l is not NullNode:
-        if r is not NullNode:
-          // left, l, c, r
-          left-depth := (left is string) ? 1 : left.depth
-          right-depth := (r is string) ? 1 : r.depth
-          if left-depth < right-depth:
-            print "binarynode"
-            return [(BinaryNode left l), c, r]
-          else:
-            print "binarynode"
-            return [left, l, (BinaryNode c r)]
-        return [left, l, c]
-      if r is not NullNode:
-        return [left, c, r]
       return [NullNode.instance, this, NullNode.instance]
+    while n1 is NullNode:
+      n1 = n2
+      n2 = n3
+      n3 = n4
+      n4 = NullNode.instance
+    while n2 is NullNode and (n3 is not NullNode or n4 is not NullNode):
+      n2 = n3
+      n3 = n4
+      n4 = NullNode.instance
+    while n3 is NullNode and n4 is not NullNode:
+      n3 = n4
+      n4 = NullNode.instance
+
+    n1-depth := (n1 is BinaryNode) ? (n1 as BinaryNode).depth : 1
+    n2-depth := (n2 is BinaryNode) ? (n2 as BinaryNode).depth : 1
+    n3-depth := (n3 is BinaryNode) ? (n3 as BinaryNode).depth : 1
+    n4-depth := (n4 is BinaryNode) ? (n4 as BinaryNode).depth : 1
+    if n4 is not NullNode:
+      // All 4 are not null.
+      if force-single-answer or (n1-depth < limit - 1 and n2-depth < limit - 1 and n3-depth < limit - 1 and n4-depth < limit - 1):
+        return [NullNode.instance, BinaryNode (BinaryNode n1 n2) (BinaryNode n3 n4), NullNode.instance]
+      else if n3-depth < limit - 1 and n4-depth < limit - 1:
+          return [n1, n2, BinaryNode n3 n4]
+      else if n1-depth < limit - 1 and n2-depth < limit - 1:
+        return [BinaryNode n1 n2, n3, n4]
+      else if n2-depth < limit - 1 and n3-depth < limit - 1:
+        return [n1, BinaryNode n2 n3, n4]
+      if n1-depth < n3-depth:
+        return [BinaryNode n1 n2, n3, n4]
+      else:
+        return [n1, n2, BinaryNode n3 n4]
+    if n3 is not NullNode:
+      // Three non-null.
+      force-left := force-single-answer and (n1-depth <= n3-depth)
+      force-right := force-single-answer and not force-left
+      if force-left or (n1-depth < limit - 1 and n2-depth < limit - 1 and n3-depth < limit):
+        return [NullNode.instance, BinaryNode (BinaryNode n1 n2) n3, NullNode.instance]
+      else if force-right or (n1-depth < limit and n2-depth < limit - 1 and n3-depth < limit - 1):
+        return [NullNode.instance, BinaryNode n1 (BinaryNode n2 n3), NullNode.instance]
+      return [n1, n2, n3]
+    if n2 is not NullNode:
+      // Two.
+      if force-single-answer or (n1-depth < limit - 1 and n2-depth < limit - 1):
+        return [NullNode.instance, BinaryNode n1 n2, NullNode.instance]
+      return [NullNode.instance, n1, n2]
+    return [NullNode.instance, n1, NullNode.instance]
 
   line n/int -> string:
     if not 0 <= n < line-count: throw "Invalid line"
