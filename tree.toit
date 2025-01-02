@@ -17,6 +17,17 @@ class Document:
 
   static empty_ := Document NullNode.instance null
 
+  /**
+   * Creates a collection that has the numbered lines in it.
+   * $root a string, or a Node, including NullNode.
+   * zero-based $from, $to.  To is non-inclusive.
+   */
+  static range root from/int to/int:
+    if root is string:
+      if from != 0 or to != 1: throw "Invalid range $from-$to"
+      return root
+    return root.range from to
+
   append lines -> Document:
     if lines is not string and lines is not Node:
       throw "Invalid lines"
@@ -366,14 +377,3 @@ join_ node/Node divider/string -> string:
   array := []
   node.do: array.add it
   return array.join divider
-
-/**
- * Creates a collection that has the numbered lines in it.
- * $root a string, or a Node, including NullNode.
- * zero-based $from, $to.  To is non-inclusive.
- */
-range root from/int to/int:
-  if root is string:
-    if from != 0 or to != 1: throw "Invalid range $from-$to"
-    return root
-  return root.range from to
