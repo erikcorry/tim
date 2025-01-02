@@ -47,13 +47,24 @@ class Document:
     if result.root is Node: result.root = result.root.rebalance 20
     return result
 
-  static line-count thing -> int:
+  line-count -> int:
+    if root is NullNode: return 0
+    if root is string: return 1
+    return root.line-count
+
+  line number/int -> string:
+    if root is NullNode:
+      throw "Empty document"
+    if root is string: return root
+    return root.line number
+
+  static line-count_ thing -> int:
     if thing is string: return 1
     return thing.line-count
 
   insert lines at/int -> Document:
     if at == 0: return prepend lines
-    line-count := line-count root
+    line-count := line-count_ root
     if at == line-count: return append lines
     if not 0 < at < line-count: throw "Invalid at"
     left := range root 0 at
@@ -67,11 +78,6 @@ class Document:
       block.call root
       return
     root.do block
-
-  // How many lines of screen does this $line wrap to?
-  static wrap-count_ line/string w/int -> int:
-    if line.size <= w: return 1
-    return line.size / w
 
 /*
 class IterationPoint:
@@ -224,13 +230,16 @@ class BinaryNode extends Node:
     //   ╰┤╰b
     //    ╰c
 
+  /// Rebalance the tree to try to get under a max depth of
+  ///   $limit.  Only one rebalancing operation is done, so you
+  ///   may need to rerun to get the depth down to the limit.
+  ///   If the limit is at least twice the minimum depth of the
+  ///   tree it should succeed eventually.
   rebalance limit/int -> Node:
-    if line-count & 0xfff == 0:
-      print "$line-count lines, depth $depth"
     lcr := rebalance_ (depth - 1) --force-single-answer
     return lcr[1]
 
-  splat2_ array -> BinaryNode:
+  static splat2_ array -> BinaryNode:
     assert: array.size >= 2
     if array.size == 2: return BinaryNode array[0] array[1]
     if array.size == 3: return BinaryNode array[0] (BinaryNode array[1] array[2])
@@ -238,18 +247,14 @@ class BinaryNode extends Node:
         splat2_ array[.. array.size / 2]
         splat2_ array[array.size / 2 ..]
 
-  splat_ node/BinaryNode -> BinaryNode:
+  /// Return a perfectly rebalanced tree.  Uses a lot of memory if the
+  /// tree is very big.
+  static splat node/BinaryNode -> BinaryNode:
     max-lines := 1 << node.depth
-    if node.line-count * 6 < max-lines:
-      print "splat $node.line-count lines that had depth $node.depth"
-      print node.dump_
-      array := []
-      node.do: array.add it
-      result := splat2_ array
-      print "  Splatted $result.line-count lines down to depth $result.depth"
-      print result.dump_
-      return result
-    return node
+    if node.line-count * 4 >= max-lines: return node
+    array := []
+    node.do: array.add it
+    return splat2_ array
 
   rebalance_ limit/int --force-single-answer/bool -> List:
     if left-depth < limit and right-depth < limit: return [NullNode.instance, this, NullNode.instance]
@@ -300,7 +305,7 @@ class BinaryNode extends Node:
         return [BinaryNode n1 n2, n3, n4]
       else if n2-depth < limit - 1 and n3-depth < limit - 1:
         return [n1, BinaryNode n2 n3, n4]
-      if n1-depth < n3-depth:
+      if n1-depth + n2-depth < n3-depth + n4-depth:
         return [BinaryNode n1 n2, n3, n4]
       else:
         return [n1, n2, BinaryNode n3 n4]
@@ -322,13 +327,11 @@ class BinaryNode extends Node:
 
   line n/int -> string:
     if not 0 <= n < line-count: throw "Invalid line"
-    if left is Node:
-      count := left-line-count
-      if n < count: return left.line n
-      if n == count and right is string: return right
-      return right.line (n - count)
-    if n == 0: return left
-    return right.line (n - 1)
+    if n == 0 and left is string: return left as string
+    if n < left-line-count:
+      return left.line n
+    if n == 1: return right as string
+    return right.line (n - left-line-count)
 
   range from/int to/int:
     if from == 0 and to == line-count: return this
