@@ -1,95 +1,3 @@
-class Document:
-  // Null: Empty document.
-  // String: Single-line document.
-  // Node: Multi-line document.
-  root := NullNode.instance
-  previous /Document? := null
-  next /Document?  := null
-
-  dump_ -> string:
-    if root is string: return root
-    return root.dump_
-
-  constructor .root .previous:
-
-  static empty -> Document:
-    return empty_
-
-  static empty_ := Document NullNode.instance null
-
-  /**
-   * Creates a collection that has the numbered lines in it.
-   * $root a string, or a Node, including NullNode.
-   * zero-based $from, $to.  To is non-inclusive.
-   */
-  static range root from/int to/int:
-    if root is string:
-      if from != 0 or to != 1: throw "Invalid range $from-$to"
-      return root
-    return root.range from to
-
-  append lines -> Document:
-    if lines is not string and lines is not Node:
-      throw "Invalid lines"
-    if lines is NullNode: return this
-    result /Document := ?
-    if root is NullNode:
-      result = Document lines this
-    else if root is string:
-      result = Document (BinaryNode root lines) this
-    else:
-      result = Document (BinaryNode root lines) this
-    next = result
-    if result.root is Node: result.root = result.root.rebalance 20
-    return result
-
-  prepend lines -> Document:
-    if lines is not string and lines is not Node:
-      throw "Invalid lines"
-    if lines is NullNode: return this
-    result /Document := ?
-    if root is NullNode:
-      result = Document lines this
-    else if root is string:
-      result = Document (BinaryNode lines root) this
-    else:
-      result = Document (BinaryNode lines root) this
-    next = result
-    if result.root is Node: result.root = result.root.rebalance 20
-    return result
-
-  line-count -> int:
-    if root is NullNode: return 0
-    if root is string: return 1
-    return root.line-count
-
-  line number/int -> string:
-    if root is NullNode:
-      throw "Empty document"
-    if root is string: return root
-    return root.line number
-
-  static line-count_ thing -> int:
-    if thing is string: return 1
-    return thing.line-count
-
-  insert lines at/int -> Document:
-    if at == 0: return prepend lines
-    line-count := line-count_ root
-    if at == line-count: return append lines
-    if not 0 < at < line-count: throw "Invalid at"
-    left := range root 0 at
-    right := range root at line-count
-    result := Document (BinaryNode left (BinaryNode lines right)) this
-    next = result
-    return result
-
-  do [block] -> none:
-    if root is string:
-      block.call root
-      return
-    root.do block
-
 /*
 class IterationPoint:
   // The line number.
@@ -132,6 +40,27 @@ abstract class Node:
   abstract dump_ p1/string p2/string p3/string p4/string p5/string -> string
   
   abstract range from/int to/int -> Node
+
+  /**
+   * Creates a tree that has the numbered lines in it.
+   * $root a string, or a Node, including NullNode.
+   * zero-based $from, $to.  To is non-inclusive.
+   */
+  static range root from/int to/int:
+    if root is string:
+      if from != 0 or to != 1: throw "Invalid range $from-$to"
+      return root
+    return root.range from to
+
+  static append root lines:
+    if root is NullNode: return lines
+    if lines is NullNode: return root
+    return BinaryNode root lines
+
+  static prepend root lines:
+    if root is NullNode: return lines
+    if lines is NullNode: return root
+    return BinaryNode lines root
 
 class NullNode extends Node:
   line-count -> int: return 0
