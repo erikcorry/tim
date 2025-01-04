@@ -62,6 +62,10 @@ abstract class Node:
     if lines is NullNode: return root
     return BinaryNode lines root
 
+  static line-count node -> int:
+    if node is string: return 1
+    return node.line-count
+
 class NullNode extends Node:
   line-count -> int: return 0
   depth -> int: return 0
@@ -100,14 +104,6 @@ class BinaryNode extends Node:
         + (right is string ? 1 : right.line-count)
     depth = 1 + (max (left is string ? 1 : left.depth)
                      (right is string ? 1 : right.depth))
-
-  left-line-count -> int:
-    if left is string: return 1
-    return left.line-count
-
-  right-line-count -> int:
-    if right is string: return 1
-    return right.line-count
 
   do [block] -> none:
     if left is string:
@@ -268,12 +264,13 @@ class BinaryNode extends Node:
   line n/int -> string:
     if not 0 <= n < line-count: throw "Invalid line"
     if n == 0 and left is string: return left as string
-    if n < left-line-count:
+    if n < (Node.line-count left):
       return left.line n
     if n == 1: return right as string
-    return right.line (n - left-line-count)
+    return right.line (n - (Node.line-count left))
 
   range from/int to/int:
+    left-line-count := Node.line-count left
     if from == 0 and to == line-count: return this
     if to <= left-line-count: return left-range from to
     if from >= left-line-count:

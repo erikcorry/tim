@@ -60,6 +60,14 @@ class Document:
 
   constructor .root .previous:
 
+  constructor left right .previous:
+    if left is NullNode:
+      root = right
+    else if right is NullNode:
+      root = left
+    else:
+      root = BinaryNode left right
+
   static empty -> Document:
     return empty_
 
@@ -69,13 +77,7 @@ class Document:
     if lines is not string and lines is not Node:
       throw "Invalid lines"
     if lines is NullNode: return this
-    result /Document := ?
-    if root is NullNode:
-      result = Document lines this
-    else if root is string:
-      result = Document (BinaryNode root lines) this
-    else:
-      result = Document (BinaryNode root lines) this
+    result /Document := Document root lines this
     next = result
     if result.root is Node: result.root = result.root.rebalance 20
     return result
@@ -84,26 +86,21 @@ class Document:
     if lines is not string and lines is not Node:
       throw "Invalid lines"
     if lines is NullNode: return this
-    result /Document := ?
-    if root is NullNode:
-      result = Document lines this
-    else if root is string:
-      result = Document (BinaryNode lines root) this
-    else:
-      result = Document (BinaryNode lines root) this
+    result /Document := Document lines root this
     next = result
     if result.root is Node: result.root = result.root.rebalance 20
     return result
 
   line-count -> int:
-    if root is NullNode: return 0
     if root is string: return 1
     return root.line-count
 
   line-at number/int -> string:
     if root is NullNode:
       throw "Empty document"
-    if root is string: return root
+    if root is string: 
+      if number != 0: throw "Invalid line number"
+      return root
     return root.line number
 
   static line-count_ thing -> int:
@@ -117,7 +114,7 @@ class Document:
     if not 0 < at < line-count: throw "Invalid at"
     left := Node.range root 0 at
     right := Node.range root at line-count
-    result := Document (BinaryNode left (BinaryNode lines right)) this
+    result := Document left (BinaryNode lines right) this
     next = result
     return result
 
@@ -225,21 +222,11 @@ class Document:
       current-line = to - 1
       return this  // No change to document.
     if command == "d":
-      left := from < 1 ? null : (Node.range root 0 from)
-      right := to >= line-count ? null : (Node.range root to line-count)
-      result := ?
-      if left:
-        if right:
-          result = Document (BinaryNode left right) this
-        else:
-          result = Document left this
-        result.current-line = left.line-count - 1
-      else if right:
-        result = Document right this
-        result.current-line = 0
-      else:
-        result = Document NullNode.instance this
-        result.current-line = 0
+      left := from < 1 ? NullNode.instance : (Node.range root 0 from)
+      right := to >= line-count ? NullNode.instance : (Node.range root to line-count)
+      result := Document left right this
+      next = result
+      result.current-line = Node.line-count left
       return result
 
     on-error.call "Unknown command: '$command'"
