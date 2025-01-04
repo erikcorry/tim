@@ -138,8 +138,8 @@ class Document:
     assert: parts.size == 2
     l := parts[0]
     r := parts[1]
-    from/int := parse-range-part l on-error
-    to/int := parse-range-part r on-error
+    from/int := l == "" ? 1 : (parse-range-part l on-error)
+    to/int := r == "" ? line-count : (parse-range-part r on-error)
     block.call (from - 1) to
 
   // Parses the range part and returns the 1-based literal line number.
@@ -224,5 +224,23 @@ class Document:
         from++
       current-line = to - 1
       return this  // No change to document.
+    if command == "d":
+      left := from < 1 ? null : (Node.range root 0 from)
+      right := to >= line-count ? null : (Node.range root to line-count)
+      result := ?
+      if left:
+        if right:
+          result = Document (BinaryNode left right) this
+        else:
+          result = Document left this
+        result.current-line = left.line-count - 1
+      else if right:
+        result = Document right this
+        result.current-line = 0
+      else:
+        result = Document NullNode.instance this
+        result.current-line = 0
+      return result
+
     on-error.call "Unknown command: '$command'"
     unreachable
