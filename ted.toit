@@ -121,39 +121,38 @@ class Document:
     next = result
     return result
 
-  do [block] -> none:
-    if root is string:
-      block.call root
+  do node [block] -> none:
+    if node is string:
+      block.call node
       return
-    root.do block
+    node.do block
 
-  /// Returns the rest of the $command, which starts with a letter.
-  /// Calls the $on-error block with the start and end of the range.
-  parse-comma-range command/string [on-error] [block] -> string?:
-    parts := command.split --at-first ","
+  /**
+  Calls the $on-error block with the start and end of the range.
+  Arguments to the block are 0-based and do not include the last line, in
+    accordance with modern usage.  Since the ed command language is not written
+    like this, some adjustments are made.
+  */
+  parse-comma-range address/string [on-error] [block]:
+    parts := address.split --at-first ","
     assert: parts.size == 2
     l := parts[0]
     r := parts[1]
-    command-start := 0
-    while command-start < r.size and not is-command-char_ r[command-start]:
-      command-start++
-    command = r[command-start..]
-    r = r[..command-start]
     from/int := parse-range-part l on-error
-    to/int := parse-range-part --part-2 r on-error
-    block.call from to
-    return command
+    to/int := parse-range-part r on-error
+    block.call (from - 1) to
 
-  parse-range-part part/string --part-2/bool=false [on-error] -> int:
+  // Parses the range part and returns the 1-based literal line number.
+  parse-range-part part/string [on-error] -> int:
     if part.size == 0: return 0
     if is-decimal_ part:
       return int.parse part
     if part == "\$":
       return line-count
     if part == ".":
-      return current-line
+      return current-line + 1  // Add 1 because current-line is 0-based.
     if part.starts-with "+":
-      result := current-line + 1
+      result := current-line + 2  // Add 1 because current-line is 0-based.
       part = part[1..]
       if is-decimal_ part:
         return result - 1 + (int.parse part)
@@ -165,7 +164,7 @@ class Document:
         unreachable
       return result
     if part.starts-with "-":
-      result := current-line - 1
+      result := current-line   // Add 1 because current-line is 0-based.
       part = part[1..]
       if is-decimal_ part:
         return result + 1 - (int.parse part)
@@ -181,27 +180,49 @@ class Document:
 
   run-command command/string [--on-error] -> Document:
     from := current-line
-    to := current-line
-    if is-decimal_ command:
-      index := int.parse command
+    to := current-line + 1
+    command-start := 0
+    while command-start < command.size and not is-command-char_ command[command-start]:
+      command-start++
+    address := command[..command-start]
+    command = command[command-start..]
+    if is-decimal_ address:
+      index := int.parse address
       if not 1 <= index <= line-count:
-        on-error.call "? Invalid index"
+        on-error.call "Invalid index: '$address'"
         unreachable
-      else:
+      if command == "":
+        // Just moves to the numbered line and prints it.
         current-line = index - 1  // Internal lines are 0-based.
         print
             line-at current-line
         // Setting the current line does not create a new version of the
         // document.
         return this
-    else if (command.index-of ",") != -1:
-      command = parse-comma-range command on-error: | f/int t/int |
+      from = index
+      to = index
+    else if (address.index-of ",") != -1:
+      parse-comma-range address on-error: | f/int t/int |
         from = f
         to = t
-      // For now only support p (print command).
-      (Node.range root from to).do: | line |
+    else if address == ";":
+      from = current-line
+      to = line-count
+    else if address != "":
+      from = (parse-range-part address on-error) - 1
+      to = from + 1
+
+    // Print the range.
+    if command == "p":
+      do (Node.range root from to): | line |
         print line
-      return this
-    else:
-      on-error.call ""
-      unreachable
+      current-line = to - 1
+      return this  // No change to document.
+    if command == "n":
+      do (Node.range root from to): | line |
+        print "$(from + 1)\t$line"
+        from++
+      current-line = to - 1
+      return this  // No change to document.
+    on-error.call "Unknown command: '$command'"
+    unreachable
