@@ -236,6 +236,7 @@ class Document:
       result := Document left right this
       next = result
       result.current-line = Node.line-count left
+      if right is NullNode: result.current-line--
       result.modified = true
       return result
     if command == "":

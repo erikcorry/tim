@@ -26,6 +26,7 @@ do
   in_file=tests/$UNIX_NAME-inputs/$name.cmd
   toit_out_file=build/$TOIT_NAME-$name-$optionname.out
   unix_out_file=build/gold/$UNIX_NAME-$name-$optionname.out
+  bash -c "$TOIT_RUN bin/$TOIT_NAME.toit $OPTIONS < $in_file"
   bash -c "$TOIT_RUN bin/$TOIT_NAME.toit $OPTIONS < $in_file > $toit_out_file"
   bash -c "$UNIX_NAME $OPTIONS < $in_file > $unix_out_file"
 
