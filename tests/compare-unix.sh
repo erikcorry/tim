@@ -18,12 +18,12 @@ optionname=${OPTIONS_FILE##*/}
 optionname=${optionname%%.options}
 OPTIONS=$(cat $OPTIONS_FILE)
 echo Testing $optionname options: $OPTIONS
-for cmdfile in tests/$TOIT_NAME-inputs/*.cmd
+for cmdfile in tests/$UNIX_NAME-inputs/*.cmd
 do
   name=${cmdfile##*/}
   name=${name%%.cmd}
   echo "Name '$name'"
-  in_file=tests/$TOIT_NAME-inputs/$name.cmd
+  in_file=tests/$UNIX_NAME-inputs/$name.cmd
   toit_out_file=build/$TOIT_NAME-$name-$optionname.out
   unix_out_file=build/gold/$UNIX_NAME-$name-$optionname.out
   bash -c "$TOIT_RUN bin/$TOIT_NAME.toit $OPTIONS < $in_file > $toit_out_file"

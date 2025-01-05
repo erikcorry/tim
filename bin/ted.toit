@@ -33,7 +33,7 @@ main args/List -> int:
       print "? $message"
       continue
 
-  print "?"  // Emulate exiting question mark of ed.
+  if document.modified: print "?"  // Emulate exiting question mark of ed.
   return 0
 
 is-decimal_ str/string -> bool:
@@ -56,14 +56,17 @@ class Document:
   previous /Document? := null
   next /Document?  := null
   current-line/int := 0
+  modified := false
 
   dump_ -> string:
     if root is string: return root
     return root.dump_
 
   constructor .root .previous:
+    modified = previous ? previous.modified : false
 
   constructor left right .previous:
+    modified = previous ? previous.modified : false
     if left is NullNode:
       root = right
     else if right is NullNode:
@@ -144,39 +147,49 @@ class Document:
 
   // Parses the range part and returns the 1-based literal line number.
   parse-range-part part/string [on-error] -> int:
-    if part.size == 0: return 0
-    if is-decimal_ part:
-      return int.parse part
-    if part == "\$":
-      return line-count
-    if part == ".":
-      return current-line + 1  // Add 1 because current-line is 0-based.
-    if part.starts-with "+":
-      result := current-line + 2  // Add 1 because current-line is 0-based.
-      part = part[1..]
-      if is-decimal_ part:
-        return result - 1 + (int.parse part)
-      while part.starts-with "+":
-        part = part[1..]
+    plus := part.index-of "+"
+    if plus == -1: plus = part.index-of "-"
+    plus-part := ""
+    if plus != -1:
+      plus-part = part[plus ..]
+      part = part[..plus]
+    result/int := ?
+    if part.size == 0:
+      result = current-line + 1
+    else if is-decimal_ part:
+      result = int.parse part
+    else if part == "\$":
+      result = line-count
+    else if part == ".":
+      result = current-line + 1  // Add 1 because current-line is 0-based.
+    else:
+      on-error.call "Invalid range part '$part'"
+      unreachable
+    if plus-part.starts-with "+":
+      result++
+      plus-part = plus-part[1..]
+      if is-decimal_ plus-part:
+        result += (int.parse plus-part) - 1
+        plus-part = ""
+      while plus-part.starts-with "+":
+        plus-part = plus-part[1..]
         result++
-      if part != "":
-        on-error.call "Invalid range part '$part'"
+      if plus-part != "":
+        on-error.call "Invalid range part '$plus-part'"
         unreachable
-      return result
-    if part.starts-with "-":
-      result := current-line   // Add 1 because current-line is 0-based.
-      part = part[1..]
-      if is-decimal_ part:
-        return result + 1 - (int.parse part)
-      while part.starts-with "-":
-        part = part[1..]
+    else if plus-part.starts-with "-":
+      result--
+      plus-part = plus-part[1..]
+      if is-decimal_ plus-part:
+        result -= -1 + (int.parse plus-part)
+        plus-part = ""
+      while plus-part.starts-with "-":
+        plus-part = plus-part[1..]
         result--
-      if part != "":
-        on-error.call "Invalid range part '$part'"
+      if plus-part != "":
+        on-error.call "Invalid range part '$plus-part'"
         unreachable
-      return result
-    on-error.call "Invalid range part '$part'"
-    unreachable
+    return result
 
   run-command command/string [--on-error] -> Document:
     from := current-line
@@ -186,22 +199,15 @@ class Document:
       command-start++
     address := command[..command-start]
     command = command[command-start..]
+    has-comma /bool := (address.index-of ",") != -1
     if is-decimal_ address:
       index := int.parse address
       if not 1 <= index <= line-count:
         on-error.call "Invalid index: '$address'"
         unreachable
-      if command == "":
-        // Just moves to the numbered line and prints it.
-        current-line = index - 1  // Internal lines are 0-based.
-        print
-            line-at current-line
-        // Setting the current line does not create a new version of the
-        // document.
-        return this
       from = index
       to = index
-    else if (address.index-of ",") != -1:
+    else if has-comma:
       parse-comma-range address on-error: | f/int t/int |
         from = f
         to = t
@@ -230,7 +236,16 @@ class Document:
       result := Document left right this
       next = result
       result.current-line = Node.line-count left
+      result.modified = true
       return result
+    if command == "":
+      // Just moves to the numbered line and prints it.
+      current-line = to - 1  // Internal lines are 0-based.
+      print
+          line-at current-line
+      // Setting the current line does not create a new version of the
+      // document.
+      return this
 
     on-error.call "Unknown command: '$command'"
     unreachable
