@@ -4,6 +4,8 @@ import cli
 import .tree
 
 main args/List -> int:
+  if args.size > 0 and args[0] == "-l":
+    args = args[1..]
   if args.size != 1:
     throw "Usage: ted <input file>"
   
@@ -31,6 +33,7 @@ main args/List -> int:
       print "? $message"
       continue
 
+  print "?"  // Emulate exiting question mark of ed.
   return 0
 
 is-decimal_ str/string -> bool:
