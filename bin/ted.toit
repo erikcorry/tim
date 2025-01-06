@@ -29,7 +29,7 @@ main args/List -> int:
   input := pipe.stdin.in
 
   while line := input.read-line:
-    document = document.run-command line --on-error=: | message |
+    document = document.run-command input line --on-error=: | message |
       print "? $message"
       continue
 
@@ -191,7 +191,7 @@ class Document:
         unreachable
     return result
 
-  run-command command/string [--on-error] -> Document:
+  run-command input command/string [--on-error] -> Document:
     from := current-line
     to := current-line + 1
     command-start := 0
@@ -199,10 +199,11 @@ class Document:
       command-start++
     address := command[..command-start]
     command = command[command-start..]
+    lowest-index := (command.starts-with "a") ? 0 : 1
     has-comma /bool := (address.index-of ",") != -1
     if is-decimal_ address:
       index := int.parse address
-      if not 1 <= index <= line-count:
+      if not lowest-index <= index <= line-count:
         on-error.call "Invalid index: '$address'"
         unreachable
       from = index
@@ -233,6 +234,24 @@ class Document:
     if command == "d":
       left := from < 1 ? NullNode.instance : (Node.range root 0 from)
       right := to >= line-count ? NullNode.instance : (Node.range root to line-count)
+      result := Document left right this
+      next = result
+      result.current-line = Node.line-count left
+      if right is NullNode: result.current-line--
+      result.modified = true
+      return result
+    if command == "a" or command == "c":
+      lines := []
+      while line := input.read-line:
+        if line == ".":
+          break
+        lines.add line
+      if command == "a": from = to
+      left := from < 1 ? NullNode.instance : (Node.range root 0 from)
+      right := to >= line-count ? NullNode.instance : (Node.range root to line-count)
+      
+      lines.do:
+        left = Node.append left it
       result := Document left right this
       next = result
       result.current-line = Node.line-count left
