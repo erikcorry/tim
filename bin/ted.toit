@@ -1,3 +1,4 @@
+import dartino-regexp.regexp
 import host.file
 import host.pipe
 import cli
@@ -258,6 +259,55 @@ class Document:
       if right is NullNode: result.current-line--
       result.modified = true
       return result
+    if command.starts-with "s" and command.size > 2:
+      parts := parse-substitute command[1..] on-error
+      re/regexp.RegExp? := null
+      exception := catch:
+        re = regexp.RegExp parts[0]
+      if exception:
+        on-error.call "Invalid regular expression: $exception"
+        unreachable
+      substitution := parts[1]
+      flags := parts[2]
+      if flags != "" and flags != "g":
+        on-error.call "Invalid flags: '$flags'"
+        unreachable
+      left := from < 1 ? NullNode.instance : (Node.range root 0 from)
+      right := to >= line-count ? NullNode.instance : (Node.range root to line-count)
+      old-lines := Node.range root from to
+      at-least-one-match := false
+      lines := Node.substitute old-lines: | line/string |
+        if flags == "":
+          match/regexp.Match? := re.first-matching line
+          if match:
+            at-least-one-match = true
+            output := ""
+            if match.index != 0:
+              output += line[..match.index]
+            output += substitution
+            if match.end-index != line.size:
+              output += line[match.end-index..]
+            output
+          else:
+            line
+        else:  // Global substitution.
+          output := ""
+          position := 0
+          found/bool := re.all-matches line 0: | match/regexp.Match |
+            output += line[position .. match.index]
+            output += substitution
+            position = match.end-index
+          if found:
+            output += line[position..]
+            at-least-one-match = true
+            output
+          else:
+            line
+      result := Document (Node.append left lines) right this
+      if not at-least-one-match:
+        on-error.call "No substitution"
+      result.modified = true
+      return result
     if command == "":
       // Just moves to the numbered line and prints it.
       current-line = to - 1  // Internal lines are 0-based.
@@ -269,3 +319,45 @@ class Document:
 
     on-error.call "Unknown command: '$command'"
     unreachable
+
+parse-substitute s/string [on-error] -> List:
+  divider := s[0]
+  if divider >= 'A':
+    on-error.call "Invalid regexp delimiter"
+    unreachable
+  after-backslash := false
+  i := 1
+  for ; i < s.size; i++:
+    if after-backslash:
+      after-backslash = false
+      continue
+    if s[i] == '\\':
+      after-backslash = true
+      continue
+    if s[i] == divider:
+      break
+  if i == s.size:
+    on-error.call "No closing delimiter"
+    unreachable
+  re := s[1..i]
+  if i + 1 == s.size: return [re, ""]
+  chars /List? := null
+  start := i + 1
+  for i = start ; i < s.size; i++:
+    if after-backslash:
+      after-backslash = false
+      chars.add s[i]
+      continue
+    if s[i] == '\\':
+      after-backslash = true
+      if not chars:
+        chars = List (i - start): s[start + it]
+      continue
+    if s[i] == divider:
+      break
+    if chars: chars.add s[i]
+  flags := (i + 1 > s.size) ? "" :  s[i + 1 ..]
+  if chars:
+    substitution := ByteArray chars.size: chars[it]
+    return [re, substitution.to-string, flags]
+  return [re, s[start..i], flags]

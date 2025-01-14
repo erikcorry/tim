@@ -52,6 +52,10 @@ abstract class Node:
       return root
     return root.range from to
 
+  static substitute root [block]:
+    if root is string: return block.call root
+    return root.substitute block
+
   static append root lines:
     if root is NullNode: return lines
     if lines is NullNode: return root
@@ -73,10 +77,13 @@ class NullNode extends Node:
   stringify -> string: return "(nullnode)"
 
   static instance := NullNode
-  
+
   do [block] -> none:
     // Do nothing.
 
+  substitute [block] -> Node:
+    return this
+  
   dump_ -> string:
     return ""
 
@@ -115,6 +122,12 @@ class BinaryNode extends Node:
     else:
       right.do block
 
+  substitute [block] -> Node:
+    new-left := Node.substitute left block
+    new-right := Node.substitute right block
+    if (identical left new-right) and (identical right new-right): return this
+    return BinaryNode new-left new-right
+  
   dump_ -> string:
     return dump_ "" "" "" "" ""
 
