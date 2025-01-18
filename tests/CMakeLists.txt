@@ -1,8 +1,8 @@
 # Tests where we compare with the Unix version of the tool.
-file(GLOB ED_TESTS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "ed/*.options")
-# file(GLOB VI_TESTS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "vi/*.options")
+file(GLOB ED_TESTS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "ed-inputs/*.cmd")
+# file(GLOB VI_TESTS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "vi-inputs/*.cmd")
 # Tests where we compare with gold files.
-file(GLOB TED_TESTS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "ted/*.options")
+file(GLOB TED_TESTS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "ted-inputs/*.cmd")
 # file(GLOB TIM_TESTS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "tim/*.options")
 
 set(TEST_TIMEOUT 40 CACHE STRING "The maximal amount of time each test is allowed to run")

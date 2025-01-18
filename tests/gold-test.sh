@@ -6,36 +6,36 @@
 set -e
 
 TOIT_RUN=$1
-OPTIONS_FILE=$2
+COMMAND_FILE=$2
 TOIT_NAME=$3
 UNIX_NAME=$4
 
 mkdir -p build
 
 # Get the name of the file without the path and the extension.
-optionname=${OPTIONS_FILE##*/}
-optionname=${optionname%%.$TOIT_NAME-options}
-mkdir -p tests/gold/$TOIT_NAME-$optionname
-mkdir -p build/$TOIT_NAME-$optionname
-OPTIONS=$(cat $OPTIONS_FILE)
-echo Testing $optionname options: $OPTIONS
+testname=${COMMAND_FILE##*/}
+testname=${testname%%.cmd}
+mkdir -p tests/gold/$TOIT_NAME-$testname
+mkdir -p build/$TOIT_NAME-$testname
+echo Testing $testname commands
 exitvalue=0
-for cmdfile in tests/$TOIT_NAME-inputs/*.cmd
+for optionfile in tests/$TOIT_NAME/*.options
 do
-  name=${cmdfile##*/}
-  name=${name%%.cmd}
+  OPTIONS=$(cat $optionfile)
+  name=${optionfile##*/}
+  name=${name%%.options}
   echo "Name '$name'"
-  in_file=tests/$TOIT_NAME-inputs/$name.cmd
-  out_file=build/$TOIT_NAME-$optionname/$name.out
+  in_file=tests/$TOIT_NAME-inputs/$testname.cmd
+  out_file=build/$TOIT_NAME-$testname/$name.out
   echo $TOIT_RUN bin/$TOIT_NAME.toit $OPTIONS < $in_file > $out_file
   $TOIT_RUN bin/$TOIT_NAME.toit $OPTIONS < $in_file > $out_file
 
-  if [ ! -f tests/gold/$TOIT_NAME-$optionname/$name.out ]; then
-    echo "No file: tests/gold/$TOIT_NAME-$optionname/$name.out"
+  if [ ! -f tests/gold/$TOIT_NAME-$testname/$name.out ]; then
+    echo "No file: tests/gold/$TOIT_NAME-$testname/$name.out"
     exitvalue=1
   else
-    diff -u tests/gold/$TOIT_NAME-$optionname/$name.out build/$TOIT_NAME-$optionname/$name.out
-    cmp tests/gold/$TOIT_NAME-$optionname/$name.out tests/gold/$TOIT_NAME-$optionname/$name.out
+    diff -u tests/gold/$TOIT_NAME-$testname/$name.out build/$TOIT_NAME-$testname/$name.out
+    cmp tests/gold/$TOIT_NAME-$testname/$name.out tests/gold/$TOIT_NAME-$testname/$name.out
   fi
 done
 
