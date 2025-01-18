@@ -213,21 +213,23 @@ class Document:
       from = (parse-range-part address on-error) - 1
       to = from + 1
 
+    if command == "a": from = to
+    left := Node.range root 0 from
+    right := Node.range root to line-count
+    old-lines := Node.range root from to
+
     // Print the range.
     if command == "p":
-      do (Node.range root from to): | line |
-        print line
+      do old-lines: print it
       current-line = to - 1
       return this  // No change to document.
     if command == "n":
-      do (Node.range root from to): | line |
+      do old-lines: | line |
         print "$(from + 1)\t$line"
         from++
       current-line = to - 1
       return this  // No change to document.
     if command == "d":
-      left := from < 1 ? NullNode.instance : (Node.range root 0 from)
-      right := to >= line-count ? NullNode.instance : (Node.range root to line-count)
       result := Document left right this
       next = result
       result.current-line = Node.line-count left
@@ -240,9 +242,6 @@ class Document:
         if line == ".":
           break
         lines.add line
-      if command == "a": from = to
-      left := from < 1 ? NullNode.instance : (Node.range root 0 from)
-      right := to >= line-count ? NullNode.instance : (Node.range root to line-count)
       
       lines.do:
         left = Node.append left it
@@ -265,9 +264,6 @@ class Document:
       if flags != "" and flags != "g":
         on-error.call "Invalid flags: '$flags'"
         unreachable
-      left := from < 1 ? NullNode.instance : (Node.range root 0 from)
-      right := to >= line-count ? NullNode.instance : (Node.range root to line-count)
-      old-lines := Node.range root from to
       at-least-one-match := false
       lines := Node.substitute old-lines: | line/string |
         if flags == "":

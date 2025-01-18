@@ -47,6 +47,7 @@ abstract class Node:
    * zero-based $from, $to.  To is non-inclusive.
    */
   static range root from/int to/int:
+    if from >= to: return NullNode.instance
     if root is string:
       if from != 0 or to != 1: throw "Invalid range $from-$to"
       return root
