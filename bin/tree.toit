@@ -38,7 +38,7 @@ abstract class Node:
   abstract dump_ -> string
 
   abstract dump_ p1/string p2/string p3/string p4/string p5/string -> string
-  
+
   abstract range from/int to/int -> Node
 
   /**
@@ -84,7 +84,7 @@ class NullNode extends Node:
 
   substitute [block] -> Node:
     return this
-  
+
   dump_ -> string:
     return ""
 
@@ -128,7 +128,7 @@ class BinaryNode extends Node:
     new-right := Node.substitute right block
     if (identical left new-right) and (identical right new-right): return this
     return BinaryNode new-left new-right
-  
+
   dump_ -> string:
     return dump_ "" "" "" "" ""
 
@@ -280,7 +280,7 @@ class BinaryNode extends Node:
     if n == 0 and left is string: return left as string
     if n < (Node.line-count left):
       return left.line n
-    if n == 1: return right as string
+    if n == 1 and right is string: return right as string
     return right.line (n - (Node.line-count left))
 
   range from/int to/int:

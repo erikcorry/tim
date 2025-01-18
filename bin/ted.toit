@@ -9,7 +9,7 @@ main args/List -> int:
     args = args[1..]
   if args.size != 1:
     throw "Usage: ted <input file>"
-  
+
   stream := (file.Stream.for-read args[0]).in
 
   document := Document.empty
@@ -105,7 +105,7 @@ class Document:
   line-at number/int -> string:
     if root is NullNode:
       throw "Empty document"
-    if root is string: 
+    if root is string:
       if number != 0: throw "Invalid line number"
       return root
     return root.line number
@@ -242,7 +242,7 @@ class Document:
         if line == ".":
           break
         lines.add line
-      
+
       lines.do:
         left = Node.append left it
       result := Document left right this
@@ -253,12 +253,7 @@ class Document:
       return result
     if command.starts-with "s" and command.size > 2:
       parts := parse-substitute command[1..] on-error
-      re/regexp.RegExp? := null
-      exception := catch:
-        re = regexp.RegExp.ed parts[0]
-      if exception:
-        on-error.call "Invalid regular expression: $exception"
-        unreachable
+      re/regexp.RegExp := parts[0]
       substitution := parts[1]
       flags := parts[2]
       if flags != "" and flags != "g":
@@ -273,7 +268,7 @@ class Document:
             output := ""
             if match.index != 0:
               output += line[..match.index]
-            output += substitution
+            output += substitution.call match
             if match.end-index != line.size:
               output += line[match.end-index..]
             output
@@ -284,7 +279,7 @@ class Document:
           position := 0
           found/bool := re.all-matches line 0: | match/regexp.Match |
             output += line[position .. match.index]
-            output += substitution
+            output += substitution.call match
             position = match.end-index
           if found:
             output += line[position..]
@@ -329,13 +324,38 @@ parse-substitute s/string [on-error] -> List:
     on-error.call "No closing delimiter"
     unreachable
   re := s[1..i]
-  if i + 1 == s.size: return [re, ""]
+
+  parsed/regexp.RegExp? := null
+  exception := catch:
+    parsed = regexp.RegExp.ed re
+  if exception:
+    on-error.call "Invalid regular expression: $exception"
+    unreachable
+  number-of-captures := parsed.number-of-captures
+
+  if i + 1 == s.size: return [parsed, ""]
   chars /List? := null
   start := i + 1
+  capture-found := false
   for i = start ; i < s.size; i++:
     if after-backslash:
       after-backslash = false
-      chars.add s[i]
+      if not chars: chars = List (i - start): s[start + it]
+      valid-capture := false
+      c := s[i]
+      j := i
+      while '0' <= c <= '9' and j < s.size and j - i < 10:
+        j++
+        c = s[j]
+      if j != i:
+        capture-number := int.parse s[i..j]
+        if 0 < capture-number <= number-of-captures:
+          i = j - 1
+          chars.add -capture-number
+          capture-found = true
+          valid-capture = true
+      if not capture-found:
+        chars.add s[i]
       continue
     if s[i] == '\\':
       after-backslash = true
@@ -347,6 +367,31 @@ parse-substitute s/string [on-error] -> List:
     if chars: chars.add s[i]
   flags := (i + 1 > s.size) ? "" :  s[i + 1 ..]
   if chars:
-    substitution := ByteArray chars.size: chars[it]
-    return [re, substitution.to-string, flags]
-  return [re, s[start..i], flags]
+    if not capture-found:
+      substitution := ByteArray chars.size: chars[it]
+      str := substitution.to-string
+      return [parsed, :: str, flags]
+    else:
+      return [parsed, construct-replace-function chars, flags]
+  return [parsed, :: s[start..i], flags]
+
+construct-replace-function chars/List -> Lambda:
+  // Always one more string than index.
+  strings := []
+  indexes := []
+  start := 0
+  for i := 0; i < chars.size; i++:
+    if chars[i] < 0:
+      substitution := ByteArray i - start: chars[start + it]
+      strings.add substitution.to-string
+      indexes.add chars[i]
+      start = i + 1
+  substitution := ByteArray chars.size - start: chars[start + it]
+  strings.add substitution.to-string
+  return :: | match/regexp.Match |
+    result := []
+    for i := 0; i < strings.size - 1; i++:
+      result.add strings[i]
+      result.add match[-indexes[i]]
+    result.add strings[strings.size - 1]
+    result.join ""  // Return value of lambda.
