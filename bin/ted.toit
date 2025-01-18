@@ -132,7 +132,7 @@ class Document:
     node.do block
 
   /**
-  Calls the $on-error block with the start and end of the range.
+  Calls the $block with the start and end of the range.
   Arguments to the block are 0-based and do not include the last line, in
     accordance with modern usage.  Since the ed command language is not written
     like this, some adjustments are made.
@@ -202,14 +202,7 @@ class Document:
     command = command[command-start..]
     lowest-index := (command.starts-with "a") ? 0 : 1
     has-comma /bool := (address.index-of ",") != -1
-    if is-decimal_ address:
-      index := int.parse address
-      if not lowest-index <= index <= line-count:
-        on-error.call "Invalid index: '$address'"
-        unreachable
-      from = index
-      to = index
-    else if has-comma:
+    if has-comma:
       parse-comma-range address on-error: | f/int t/int |
         from = f
         to = t
