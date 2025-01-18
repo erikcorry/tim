@@ -263,7 +263,7 @@ class Document:
       parts := parse-substitute command[1..] on-error
       re/regexp.RegExp? := null
       exception := catch:
-        re = regexp.RegExp parts[0]
+        re = regexp.RegExp.ed parts[0]
       if exception:
         on-error.call "Invalid regular expression: $exception"
         unreachable
