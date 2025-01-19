@@ -280,7 +280,7 @@ class BinaryNode extends Node:
     if n == 0 and left is string: return left as string
     if n < (Node.line-count left):
       return left.line n
-    if n == 1 and right is string: return right as string
+    if n == (Node.line-count left) and right is string: return right as string
     return right.line (n - (Node.line-count left))
 
   range from/int to/int:

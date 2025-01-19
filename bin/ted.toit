@@ -229,6 +229,13 @@ class Document:
         from++
       current-line = to - 1
       return this  // No change to document.
+    if command == "D":
+      // Dump document tree.
+      if old-lines is string:
+        print old-lines
+      else:
+        print old-lines.dump_
+      return this  // No change to document.
     if command == "d":
       result := Document left right this
       next = result
@@ -256,12 +263,13 @@ class Document:
       re/regexp.RegExp := parts[0]
       substitution := parts[1]
       flags := parts[2]
-      if flags != "" and flags != "g":
+      global-flag := parse-flag_ "g" flags: flags = it
+      if flags != "":
         on-error.call "Invalid flags: '$flags'"
         unreachable
       at-least-one-match := false
       lines := Node.substitute old-lines: | line/string |
-        if flags == "":
+        if not global-flag:
           match/regexp.Match? := re.first-matching line
           if match:
             at-least-one-match = true
@@ -304,6 +312,12 @@ class Document:
     on-error.call "Unknown command: '$command'"
     unreachable
 
+parse-flag_ character/string flags/string [update] -> bool:
+  idx := flags.index-of character
+  if idx == -1: return false
+  update.call flags[..idx] + flags[idx + 1..]
+  return true
+
 parse-substitute s/string [on-error] -> List:
   divider := s[0]
   if divider >= 'A':
@@ -325,55 +339,83 @@ parse-substitute s/string [on-error] -> List:
     unreachable
   re := s[1..i]
 
+  repl /string := ?
+  flags /string := ?
+  backslash-found := false
+  case-sensitive /bool := ?
+
+  if i + 1 == s.size:
+    repl = ""
+    flags = ""
+    case-sensitive = true
+  else:
+    // Quick parse of the replacement string to find its extent.
+    start := i + 1
+    post-backslash := false
+    for i = start; i < s.size; i++:
+      if post-backslash:
+        post-backslash = false
+      else if s[i] == '\\':
+        post-backslash = true
+        backslash-found = true
+      else if s[i] == divider:
+        break
+    if post-backslash:
+      on-error.call "Ends with backslash"
+      unreachable
+    repl = s[start..i]
+    flags = (i == s.size) ? "" : s[i + 1 ..]
+    case-sensitive = not (parse-flag_ "i" flags: flags = it)
+
+  // Compile the regexp.
   parsed/regexp.RegExp? := null
   exception := catch:
-    parsed = regexp.RegExp.ed re
+    parsed = regexp.RegExp.ed re --case-sensitive=case-sensitive
   if exception:
     on-error.call "Invalid regular expression: $exception"
     unreachable
   number-of-captures := parsed.number-of-captures
 
-  if i + 1 == s.size: return [parsed, ""]
-  chars /List? := null
-  start := i + 1
+  // Now we have parsed the regexp and know the number of captures we can parse
+  // the replacement string for real.
+  replacer /Lambda := ?
+  if not backslash-found:
+    replacer = :: repl
+  else:
+    replacer = parse-replace-string_ repl number-of-captures
+  return [parsed, replacer, flags]
+
+parse-replace-string_ repl/string number-of-captures/int -> Lambda:
+  chars /List? := []
   capture-found := false
-  for i = start ; i < s.size; i++:
+  after-backslash := false
+  for i := 0 ; i < repl.size; i++:
     if after-backslash:
       after-backslash = false
-      if not chars: chars = List (i - start): s[start + it]
       valid-capture := false
-      c := s[i]
       j := i
-      while '0' <= c <= '9' and j < s.size and j - i < 10:
+      while j < repl.size and '0' <= repl[j] <= '9' and j - i < 10:
         j++
-        c = s[j]
       if j != i:
-        capture-number := int.parse s[i..j]
+        capture-number := int.parse repl[i..j]
         if 0 < capture-number <= number-of-captures:
           i = j - 1
           chars.add -capture-number
           capture-found = true
           valid-capture = true
       if not capture-found:
-        chars.add s[i]
+        chars.add repl[i]
       continue
-    if s[i] == '\\':
+    if repl[i] == '\\':
       after-backslash = true
-      if not chars:
-        chars = List (i - start): s[start + it]
       continue
-    if s[i] == divider:
-      break
-    if chars: chars.add s[i]
-  flags := (i + 1 > s.size) ? "" :  s[i + 1 ..]
-  if chars:
-    if not capture-found:
-      substitution := ByteArray chars.size: chars[it]
-      str := substitution.to-string
-      return [parsed, :: str, flags]
-    else:
-      return [parsed, construct-replace-function chars, flags]
-  return [parsed, :: s[start..i], flags]
+    if chars: chars.add repl[i]
+  if not capture-found:
+    substitution := ByteArray chars.size: chars[it]
+    str := substitution.to-string
+    return :: str
+  else:
+    return construct-replace-function chars
 
 construct-replace-function chars/List -> Lambda:
   // Always one more string than index.
