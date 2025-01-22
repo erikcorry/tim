@@ -184,6 +184,16 @@ class Document:
       if result.current-line < 0: result.current-line = 0
       result.modified = true
       return result
+    if command == "j":
+      to-join := []
+      do old-lines: to-join.add it
+      replacement := to-join.join ""
+      left = Node.append left replacement
+      result := Document left right this
+      next = result
+      result.current-line = (Node.line-count left) - 1
+      result.modified = true
+      return result
     if command.starts-with "s" and command.size > 2:
       parts := parse-substitute command[1..] on-error
       re/regexp.RegExp := parts[0]
