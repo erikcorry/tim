@@ -103,5 +103,5 @@ macro(toit_project NAME PATH)
         -P "${TOIT_DOWNLOAD_PACKAGE_SCRIPT}"
   )
   add_dependencies(download_packages "${DOWNLOAD_TARGET_NAME}")
-  add_dependencies("${DOWNLOAD_TARGET_NAME}" sync_packages)
+  # add_dependencies("${DOWNLOAD_TARGET_NAME}" sync_packages)
 endmacro()

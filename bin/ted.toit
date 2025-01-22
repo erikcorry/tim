@@ -264,13 +264,16 @@ class Document:
       substitution := parts[1]
       flags := parts[2]
       global-flag := parse-flag_ "g" flags: flags = it
+      match-number := 1
+      if not global-flag:
+        match-number = parse-number-flag_ flags: flags = it
       if flags != "":
         on-error.call "Invalid flags: '$flags'"
         unreachable
       at-least-one-match := false
       lines := Node.substitute old-lines: | line/string |
         if not global-flag:
-          match/regexp.Match? := re.first-matching line
+          match/regexp.Match? := nth-match_ re line match-number
           if match:
             at-least-one-match = true
             output := ""
@@ -312,11 +315,28 @@ class Document:
     on-error.call "Unknown command: '$command'"
     unreachable
 
+nth-match_ re/regexp.RegExp line/string n/int -> regexp.Match?:
+  counter := 1
+  re.all-matches line 0: | match/regexp.Match |
+    if counter++ == n:
+      return match
+  return null
+
 parse-flag_ character/string flags/string [update] -> bool:
   idx := flags.index-of character
   if idx == -1: return false
   update.call flags[..idx] + flags[idx + 1..]
   return true
+
+parse-number-flag_ flags/string [update] -> int:
+  for i := 0; i < flags.size; i++:
+    if '1' <= flags[i] <= '9':
+      j := i + 1
+      for ; j < flags.size; j++:
+        if not '0' <= flags[j] <= '9': break
+      update.call flags[..i] + flags[j..]
+      return int.parse flags[i..j]
+  return 1
 
 parse-substitute s/string [on-error] -> List:
   divider := s[0]
