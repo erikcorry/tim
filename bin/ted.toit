@@ -254,8 +254,8 @@ class Document:
         left = Node.append left it
       result := Document left right this
       next = result
-      result.current-line = Node.line-count left
-      if right is NullNode: result.current-line--
+      result.current-line = (Node.line-count left) - 1
+      if result.current-line < 0: result.current-line = 0
       result.modified = true
       return result
     if command.starts-with "s" and command.size > 2:
