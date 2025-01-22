@@ -209,6 +209,9 @@ class Document:
     else if address == ";":
       from = current-line
       to = line-count
+    else if address == "%":
+      from = 0
+      to = line-count
     else if address != "":
       from = (parse-range-part address on-error) - 1
       to = from + 1
@@ -270,12 +273,14 @@ class Document:
       if flags != "":
         on-error.call "Invalid flags: '$flags'"
         unreachable
-      at-least-one-match := false
+      last-matched-line/int? := null
+      line-no := from - 1
       lines := Node.substitute old-lines: | line/string |
+        line-no++
         if not global-flag:
           match/regexp.Match? := nth-match_ re line match-number
           if match:
-            at-least-one-match = true
+            last-matched-line = line-no
             output := ""
             if match.index != 0:
               output += line[..match.index]
@@ -294,12 +299,14 @@ class Document:
             position = match.end-index
           if found:
             output += line[position..]
-            at-least-one-match = true
+            last-matched-line = line-no
             output
           else:
             line
       result := Document (Node.append left lines) right this
-      if not at-least-one-match:
+      if last-matched-line:
+        result.current-line = last-matched-line
+      else:
         on-error.call "No substitution"
       result.modified = true
       return result
