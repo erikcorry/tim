@@ -44,7 +44,8 @@ is-decimal_ str/string -> bool:
     if not '0' <= it <= '9': return false
   return true
 
-is-command-char_ char/int -> bool:
+is-command-char_ char/int? -> bool:
+  if not char: return false
   if 'a' <= char <= 'z': return true
   if 'A' <= char <= 'Z': return true
   if char == '=': return true
@@ -133,8 +134,9 @@ class Document:
     node.do block
 
   run-command input command/string [--on-error] -> Document:
-    state/State := State current-line line-count this
-    c/Command := Command.parse command state on-error
+    state := State current-line line-count this
+    parser := CommandParser command state
+    c/Command := parser.parse on-error
     from := c.from
     to := c.to
     command = c.command
@@ -285,97 +287,94 @@ class State:
 
   constructor .current-line .line-count .document:
 
+class CommandParser:
+  pos := 0
+  line/string
+  state/State
+
+  constructor line/string .state:
+    if line.size > 0 and is-command-char_ line[0]:
+      this.line = (DEFAULT-ADDRESS_.get line[0] --if-absent=: "") + line
+    else:
+      this.line = line
+
+  parse [on-error] -> Command:
+    if consume ';':
+      return Command.private_ state.current-line state.line-count line[pos..]
+    if consume '%':
+      return Command.private_ 0 state.line-count line[pos..]
+    from/int? := ?
+    to/int? := ?
+    if consume ',':
+      from = 1
+      to = parse-range-part
+      if not to: to = state.line-count
+    else:
+      from = parse-range-part
+      if consume ',':
+        to = parse-range-part
+        if not to: to = from
+      else:
+        to = from
+    return Command.private_ (from ? from - 1 : null) to line[pos..]
+
+  char -> int?:
+    if pos >= line.size: return null
+    return line[pos]
+
+  consume c/int -> bool:
+    if char == c:
+      pos++
+      return true
+    return false
+
+  on-digit -> bool:
+    if pos >= line.size: return false
+    return '0' <= line[pos] <= '9'
+
+  parse-int -> int:
+    start := pos
+    while on-digit:
+      pos++
+    if pos == start: return 0
+    return int.parse line[start..pos]
+
+  parse-plus-part -> int:
+    plus-part := 0
+    if char == '-':
+      while char == '-':
+        plus-part--
+        pos++
+      if on-digit: plus-part -= parse-int - 1
+    else if char == '+':
+      while char == '+':
+        plus-part++
+        pos++
+      if on-digit: plus-part += parse-int - 1
+    return plus-part
+
+  // Parses the range part and returns the 1-based literal line number.
+  parse-range-part -> int?:
+    base/int := ?
+    if on-digit:
+      base = parse-int
+    else if consume '$':
+      base = state.line-count
+    else if consume '.':
+      base = state.current-line + 1  // Add 1 because current-line is 0-based.
+    else:
+      if char == '+' or char == '-':
+        base = state.current-line + 1
+      else:
+        return null
+    return base + parse-plus-part
+
 class Command:
   from/int?
   to/int?
   command/string
 
   constructor.private_ .from .to .command:
-
-  static parse line/string state/State [on-error] -> Command:
-    command-start := 0
-    while command-start < line.size and not is-command-char_ line[command-start]:
-      c := line[command-start]
-      if c == '/' or c == '?':
-        command-start = get-regexp-end line (command-start + 1) --divider=c on-error
-      command-start++
-    address := line[..command-start]
-    command := line[command-start..]
-    if address == "" and command.size != 0:
-      address = DEFAULT-ADDRESS_.get command[0] --if-absent=: ""
-    has-comma /bool := (address.index-of ",") != -1
-    if has-comma:
-      parse-comma-range address state on-error: | f/int t/int |
-        return Command.private_ f t command
-    if address == ";":
-      return Command.private_ state.current-line state.line-count command
-    if address == "%":
-      return Command.private_ 0 state.line-count command
-    if address != "":
-      from := (parse-range-part address state on-error) - 1
-      return Command.private_ from (from + 1) command
-    return Command.private_ null null command
-
-  /**
-  Calls the $block with the start and end of the range.
-  Arguments to the block are 0-based and do not include the last line, in
-    accordance with modern usage.  Since the ed command language is not written
-    like this, some adjustments are made.
-  */
-  static parse-comma-range address/string state/State [on-error] [block]:
-    parts := address.split --at-first ","
-    assert: parts.size == 2
-    l := parts[0]
-    r := parts[1]
-    from/int := l == "" ? 1 : (parse-range-part l state on-error)
-    to/int := r == "" ? state.line-count : (parse-range-part r state on-error)
-    block.call (from - 1) to
-
-  // Parses the range part and returns the 1-based literal line number.
-  static parse-range-part part/string state/State [on-error] -> int:
-    plus := part.index-of "+"
-    if plus == -1: plus = part.index-of "-"
-    plus-part := ""
-    if plus != -1:
-      plus-part = part[plus ..]
-      part = part[..plus]
-    result/int := ?
-    if part.size == 0:
-      result = state.current-line + 1
-    else if is-decimal_ part:
-      result = int.parse part
-    else if part == "\$":
-      result = state.line-count
-    else if part == ".":
-      result = state.current-line + 1  // Add 1 because current-line is 0-based.
-    else:
-      on-error.call "Invalid range part '$part'"
-      unreachable
-    if plus-part.starts-with "+":
-      result++
-      plus-part = plus-part[1..]
-      if is-decimal_ plus-part:
-        result += (int.parse plus-part) - 1
-        plus-part = ""
-      while plus-part.starts-with "+":
-        plus-part = plus-part[1..]
-        result++
-      if plus-part != "":
-        on-error.call "Invalid range part '$plus-part'"
-        unreachable
-    else if plus-part.starts-with "-":
-      result--
-      plus-part = plus-part[1..]
-      if is-decimal_ plus-part:
-        result -= -1 + (int.parse plus-part)
-        plus-part = ""
-      while plus-part.starts-with "-":
-        plus-part = plus-part[1..]
-        result--
-      if plus-part != "":
-        on-error.call "Invalid range part '$plus-part'"
-        unreachable
-    return result
 
 nth-match_ re/regexp.RegExp line/string n/int -> regexp.Match?:
   counter := 1
