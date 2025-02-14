@@ -281,7 +281,7 @@ DEFAULT-ADDRESS_ ::= {
 }
 
 class State:
-  current-line/int
+  current-line/int := ?
   line-count/int
   document/Document
 
@@ -299,19 +299,25 @@ class CommandParser:
       this.line = line
 
   parse [on-error] -> Command:
-    if consume ';':
-      return Command.private_ state.current-line state.line-count line[pos..]
     if consume '%':
       return Command.private_ 0 state.line-count line[pos..]
     from/int? := ?
     to/int? := ?
-    if consume ',':
+    if consume ';':
+      from = state.current-line + 1
+      to = parse-range-part
+      if not to: to = state.line-count
+    else if consume ',':
       from = 1
       to = parse-range-part
       if not to: to = state.line-count
     else:
       from = parse-range-part
-      if consume ',':
+      if consume ';':
+        state.current-line = from - 1
+        to = parse-range-part
+        if not to: to = from
+      else if consume ',':
         to = parse-range-part
         if not to: to = from
       else:
