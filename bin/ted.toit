@@ -133,7 +133,7 @@ class Document:
     node.do block
 
   run-command input command/string [--on-error] -> Document:
-    state/State := State current-line line-count
+    state/State := State current-line line-count this
     c/Command := Command.parse command state on-error
     from := c.from
     to := c.to
@@ -281,8 +281,9 @@ DEFAULT-ADDRESS_ ::= {
 class State:
   current-line/int
   line-count/int
+  document/Document
 
-  constructor .current-line .line-count:
+  constructor .current-line .line-count .document:
 
 class Command:
   from/int?
@@ -294,6 +295,9 @@ class Command:
   static parse line/string state/State [on-error] -> Command:
     command-start := 0
     while command-start < line.size and not is-command-char_ line[command-start]:
+      c := line[command-start]
+      if c == '/' or c == '?':
+        command-start = get-regexp-end line (command-start + 1) --divider=c on-error
       command-start++
     address := line[..command-start]
     command := line[command-start..]
@@ -396,13 +400,8 @@ parse-number-flag_ flags/string [update] -> int:
       return int.parse flags[i..j]
   return 1
 
-parse-substitute s/string [on-error] -> List:
-  divider := s[0]
-  if divider >= 'A':
-    on-error.call "Invalid regexp delimiter"
-    unreachable
+get-regexp-end s/string i/int --divider/int [on-error] -> int:
   after-backslash := false
-  i := 1
   for ; i < s.size; i++:
     if after-backslash:
       after-backslash = false
@@ -415,6 +414,15 @@ parse-substitute s/string [on-error] -> List:
   if i == s.size:
     on-error.call "No closing delimiter"
     unreachable
+  return i
+
+parse-substitute s/string [on-error] -> List:
+  divider := s[0]
+  if divider >= 'A':
+    on-error.call "Invalid regexp delimiter"
+    unreachable
+  i := get-regexp-end s 1 --divider=divider on-error
+
   re := s[1..i]
 
   repl /string := ?
