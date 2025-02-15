@@ -300,7 +300,7 @@ class CommandParser:
 
   parse [on-error] -> Command:
     if consume '%':
-      return Command.private_ 0 state.line-count line[pos..]
+      return Command.private_ 1 state.line-count line[pos..]
     from/int? := ?
     to/int? := ?
     if consume ';':
@@ -322,7 +322,7 @@ class CommandParser:
         if not to: to = from
       else:
         to = from
-    return Command.private_ (from ? from - 1 : null) to line[pos..]
+    return Command.private_ from to line[pos..]
 
   char -> int?:
     if pos >= line.size: return null
@@ -380,7 +380,8 @@ class Command:
   to/int?
   command/string
 
-  constructor.private_ .from .to .command:
+  constructor.private_ f/int? .to .command:
+    from = f ? f - 1 : null
 
 nth-match_ re/regexp.RegExp line/string n/int -> regexp.Match?:
   counter := 1
